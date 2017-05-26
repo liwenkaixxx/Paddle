@@ -32,6 +32,7 @@ enum InputType {
   INPUT_SPARSE_NON_VALUE_DATA,
   INPUT_SPARSE_FLOAT_VALUE_DATA,
   INPUT_DENSE_DIM_DATA,  // using sequence length to init dense data
+  INPUT_SELF_DEFINE_DATA
 };
 
 struct ParaSparse {
@@ -66,6 +67,7 @@ struct InputDef {
   bool isStatic;
   std::vector<int> labelInitValue;
   std::vector<int> labelSeqStartPositions;
+  MatrixPtr selfDefineData;
 
   InputDef(InputType type, string nameIn, size_t dimIn, size_t sizeIn) {
     inputType = type;
@@ -73,6 +75,20 @@ struct InputDef {
     dim = dimIn;
     paraSize = sizeIn;
     sparse = {""};
+    isStatic = false;
+  }
+
+  InputDef(InputType type,
+           string nameIn,
+           MatrixPtr selfDefineData,
+           std::vector<int> labelSeqStartPositions)
+      : labelSeqStartPositions(labelSeqStartPositions),
+        selfDefineData(selfDefineData) {
+    inputType = type;
+    name = nameIn;
+    dim = 0;
+    sparse = {""};
+    paraSize = 0;
     isStatic = false;
   }
 
