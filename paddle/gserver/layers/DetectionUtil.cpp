@@ -388,4 +388,147 @@ bool sortScorePairDescend(const pair<real, T>& pair1,
   return pair1.first > pair2.first;
 }
 
+void applyNMSFast(const vector<NormalizedBBox>& bboxes,
+                  const real* confScoreData,
+                  size_t classIdx,
+                  size_t topK,
+                  real confThreshold,
+                  real nmsThreshold,
+                  size_t numPriorBBoxes,
+                  size_t numClasses,
+                  vector<size_t>* indices) {
+  vector<pair<real, size_t>> scores;
+  for (size_t i = 0; i < numPriorBBoxes; ++i) {
+    size_t confOffset = i * numClasses + classIdx;
+    if (confScoreData[confOffset] > confThreshold)
+      scores.push_back(std::make_pair(confScoreData[confOffset], i));
+  }
+  std::stable_sort(scores.begin(), scores.end(), sortScorePairDescend<size_t>);
+  if (topK > 0 && topK < scores.size()) scores.resize(topK);
+  while (scores.size() > 0) {
+    const size_t idx = scores.front().second;
+    bool keep = true;
+    for (size_t i = 0; i < indices->size(); ++i) {
+      if (keep) {
+        const size_t savedIdx = (*indices)[i];
+        real overlap = jaccardOverlap(bboxes[idx], bboxes[savedIdx]);
+        keep = overlap <= nmsThreshold;
+      } else
+        break;
+    }
+    if (keep) indices->push_back(idx);
+    scores.erase(scores.begin());
+  }
+}
+
+size_t getDetectionIndices(
+    const real* confData,
+    const size_t numPriorBBoxes,
+    const size_t numClasses,
+    const size_t backgroundId,
+    const size_t batchSize,
+    const size_t confThreshold,
+    const size_t nmsTopK,
+    const real nmsThreshold,
+    const size_t keepTopK,
+    const vector<vector<NormalizedBBox>>& allDecodedBBoxes,
+    vector<map<size_t, vector<size_t>>>* allDetectionIndices) {
+  size_t totalKeepNum = 0;
+  for (size_t n = 0; n < batchSize; ++n) {
+    const vector<NormalizedBBox>& decodedBBoxes = allDecodedBBoxes[n];
+    size_t numDetected = 0;
+    map<size_t, vector<size_t>> indices;
+    size_t confOffset = n * numPriorBBoxes * numClasses;
+    for (size_t c = 0; c < numClasses; ++c) {
+      if (c == backgroundId) continue;
+      applyNMSFast(decodedBBoxes,
+                   confData + confOffset,
+                   c,
+                   nmsTopK,
+                   confThreshold,
+                   nmsThreshold,
+                   numPriorBBoxes,
+                   numClasses,
+                   &(indices[c]));
+      numDetected += indices[c].size();
+    }
+    if (keepTopK > 0 && numDetected > keepTopK) {
+      vector<pair<real, pair<size_t, size_t>>> scoreIndexPairs;
+      for (size_t c = 0; c < numClasses; ++c) {
+        const vector<size_t>& labelIndices = indices[c];
+        for (size_t i = 0; i < labelIndices.size(); ++i) {
+          size_t idx = labelIndices[i];
+          scoreIndexPairs.push_back(
+              std::make_pair((confData + confOffset)[idx * numClasses + c],
+                             std::make_pair(c, idx)));
+        }
+      }
+      std::sort(scoreIndexPairs.begin(),
+                scoreIndexPairs.end(),
+                sortScorePairDescend<pair<size_t, size_t>>);
+      scoreIndexPairs.resize(keepTopK);
+      map<size_t, vector<size_t>> newIndices;
+      for (size_t i = 0; i < scoreIndexPairs.size(); ++i) {
+        size_t label = scoreIndexPairs[i].second.first;
+        size_t idx = scoreIndexPairs[i].second.second;
+        newIndices[label].push_back(idx);
+      }
+      allDetectionIndices->push_back(newIndices);
+      totalKeepNum += keepTopK;
+    } else {
+      allDetectionIndices->push_back(indices);
+      totalKeepNum += numDetected;
+    }
+  }
+  return totalKeepNum;
+}
+
+void getDetectionOutput(const real* confData,
+                        const size_t numKept,
+                        const size_t numPriorBBoxes,
+                        const size_t numClasses,
+                        const size_t batchSize,
+                        const vector<map<size_t, vector<size_t>>>& allIndices,
+                        const vector<vector<NormalizedBBox>>& allDecodedBBoxes,
+                        MatrixPtr out) {
+  MatrixPtr outBuffer;
+  Matrix::resizeOrCreate(outBuffer, numKept, 7, false, false);
+  real* bufferData = outBuffer->getData();
+  size_t count = 0;
+  for (size_t n = 0; n < batchSize; ++n) {
+    for (map<size_t, vector<size_t>>::const_iterator it = allIndices[n].begin();
+         it != allIndices[n].end();
+         ++it) {
+      size_t label = it->first;
+      const vector<size_t>& indices = it->second;
+      const vector<NormalizedBBox>& decodedBBoxes = allDecodedBBoxes[n];
+      for (size_t i = 0; i < indices.size(); ++i) {
+        size_t idx = indices[i];
+        size_t confOffset = n * numPriorBBoxes * numClasses + idx * numClasses;
+        bufferData[count * 7] = n;
+        bufferData[count * 7 + 1] = label;
+        bufferData[count * 7 + 2] = (confData + confOffset)[label];
+        NormalizedBBox clippedBBox = clipBBox(decodedBBoxes[idx]);
+        bufferData[count * 7 + 3] = clippedBBox.xMin;
+        bufferData[count * 7 + 4] = clippedBBox.yMin;
+        bufferData[count * 7 + 5] = clippedBBox.xMax;
+        bufferData[count * 7 + 6] = clippedBBox.yMax;
+        ++count;
+      }
+    }
+  }
+  out->copyFrom(bufferData, numKept * 7);
+}
+
+NormalizedBBox clipBBox(const NormalizedBBox& bbox) {
+  real realOne = static_cast<real>(1.0);
+  real realZero = static_cast<real>(0.0);
+  NormalizedBBox clippedBBox;
+  clippedBBox.xMin = std::max(std::min(bbox.xMin, realOne), realZero);
+  clippedBBox.yMin = std::max(std::min(bbox.yMin, realOne), realZero);
+  clippedBBox.xMax = std::max(std::min(bbox.xMax, realOne), realZero);
+  clippedBBox.yMax = std::max(std::min(bbox.yMax, realOne), realZero);
+  return clippedBBox;
+}
+
 }  // namespace paddle

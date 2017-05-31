@@ -212,4 +212,74 @@ template <typename T>
 bool sortScorePairDescend(const pair<real, T>& pair1,
                           const pair<real, T>& pair2);
 
+/**
+ * @brief Do NMS for bboxes to remove duplicated bboxes
+ * @param bboxes BBoxes to apply NMS
+ * @param confScoreData Confidence scores
+ * @param classIdx Class to do NMS
+ * @param topK Number to keep
+ * @param confThreshold Low boundary of confidence score
+ * @param nmsThreshold Threshold of overlap
+ * @param numPriorBBoxes Total number of prior bboxes
+ * @param numClasses Total class number
+ * @param indices Indices of high quality bboxes
+ */
+void applyNMSFast(const vector<NormalizedBBox>& bboxes,
+                  const real* confScoreData,
+                  size_t classIdx,
+                  size_t topK,
+                  real confThreshold,
+                  real nmsThreshold,
+                  size_t numPriorBBoxes,
+                  size_t numClasses,
+                  vector<size_t>* indices);
+
+/**
+ * @brief Get detection results which satify requirements
+ * @param numPriorBBoxes Prior bbox number
+ * @param numClasses Class number
+ * @param backgroundId Background class
+ * @param batchSize Image number
+ * @param confThreshold Threshold of class confidence
+ * @param nmsTopK Used in NMS operation to keep top k bbox
+ * @param nmsThreshold Used in NMS, threshold of overlap
+ * @param keepTopK How many bboxes keeped in an image
+ * @param allDecodedBBoxes Decoded bboxes for all images
+ * @param allDetectionIndices Save detection bbox indices
+ */
+size_t getDetectionIndices(
+    const real* confData,
+    const size_t numPriorBBoxes,
+    const size_t numClasses,
+    const size_t backgroundId,
+    const size_t batchSize,
+    const size_t confThreshold,
+    const size_t nmsTopK,
+    const real nmsThreshold,
+    const size_t keepTopK,
+    const vector<vector<NormalizedBBox>>& allDecodedBBoxes,
+    vector<map<size_t, vector<size_t>>>* allDetectionIndices);
+
+/**
+ * @brief Get detection results
+ * @param confData Confidence scores
+ * @param numPriorBBoxes Prior bbox number
+ * @param numClasses Class number
+ * @param batchSize Image number
+ * @param allIndices Indices of predicted bboxes
+ * @param allDecodedBBoxes BBoxes decoded
+ * @param out Output matrix
+ * image number | label | confidence score | xMin | yMin | xMax | yMax
+ */
+void getDetectionOutput(const real* confData,
+                        const size_t numKept,
+                        const size_t numPriorBBoxes,
+                        const size_t numClasses,
+                        const size_t batchSize,
+                        const vector<map<size_t, vector<size_t>>>& allIndices,
+                        const vector<vector<NormalizedBBox>>& allDecodedBBoxes,
+                        MatrixPtr out);
+
+NormalizedBBox clipBBox(const NormalizedBBox& bbox);
+
 }  // namespace paddle
