@@ -21,7 +21,8 @@ __all__ = [
     "chunk_evaluator", "sum_evaluator", "column_sum_evaluator",
     "value_printer_evaluator", "gradient_printer_evaluator",
     "maxid_printer_evaluator", "maxframe_printer_evaluator",
-    "seqtext_printer_evaluator", "classification_error_printer_evaluator"
+    "seqtext_printer_evaluator", "classification_error_printer_evaluator",
+    "detection_map_evaluator"
 ]
 
 
@@ -137,6 +138,54 @@ def evaluator_base(
         num_results=num_results,
         top_k=top_k,
         excluded_chunk_types=excluded_chunk_types, )
+
+
+@evaluator(EvaluatorAttribute.FOR_DETECTION)
+@wrap_name_default()
+def detection_map_evaluator(input,
+                            label,
+                            overlap_threshold=0.5,
+                            background_id=0,
+                            evaluate_difficult=False,
+                            ap_type="11point",
+                            name=None):
+    """
+    Detection mAP Evaluator. It will print mean Average Precision for detection.
+
+    The detection mAP Evaluator according to the detection_output's output count
+    the true positive and the false positive bbox and integral them to get the
+    mAP.
+
+    The simple usage is:
+
+    .. code-block:: python
+
+       eval =  detection_map_evaluator(input=det_output,label=lbl)
+
+    :param num_classes: The number of the classification.
+    :type num_classes: int
+    :param overlap_threshold: The bbox overlap threshold of a true positive.
+    :type overlap_threshold: float
+    :param background_id: The background class index.
+    :type background_id: int
+    :param evaluate_difficult: Wether evaluate a difficult ground truth.
+    :type evaluate_difficult: bool
+    """
+    if not isinstance(input, list):
+        input = [input]
+
+    if label:
+        input.append(label)
+
+    evaluator_base(
+        name=name,
+        type="detection_map",
+        input=input,
+        label=label,
+        overlap_threshold=overlap_threshold,
+        background_id=background_id,
+        evaluate_difficult=evaluate_difficult,
+        ap_type=ap_type)
 
 
 @evaluator(EvaluatorAttribute.FOR_CLASSIFICATION)
