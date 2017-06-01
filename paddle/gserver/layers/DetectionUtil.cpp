@@ -192,6 +192,32 @@ void getBBoxFromLabelData(const real* labelData,
     bbox.yMin = *(labelData + i * 6 + 2);
     bbox.xMax = *(labelData + i * 6 + 3);
     bbox.yMax = *(labelData + i * 6 + 4);
+    real isDifficult = *(labelData + i * 6 + 5);
+    if (std::abs(isDifficult - 0.0) < 1e-6)
+      bbox.isDifficult = false;
+    else
+      bbox.isDifficult = true;
+    bboxVec[outOffset + i] = bbox;
+  }
+}
+
+void getBBoxFromDetectData(const real* detectData,
+                           const size_t numBBoxes,
+                           vector<real>& labelVec,
+                           vector<real>& scoreVec,
+                           vector<NormalizedBBox>& bboxVec) {
+  size_t outOffset = bboxVec.size();
+  labelVec.resize(outOffset + numBBoxes);
+  scoreVec.resize(outOffset + numBBoxes);
+  bboxVec.resize(outOffset + numBBoxes);
+  for (size_t i = 0; i < numBBoxes; ++i) {
+    labelVec[outOffset + i] = *(detectData + i * 7 + 1);
+    scoreVec[outOffset + i] = *(detectData + i * 7 + 2);
+    NormalizedBBox bbox;
+    bbox.xMin = *(detectData + i * 7 + 3);
+    bbox.yMin = *(detectData + i * 7 + 4);
+    bbox.xMax = *(detectData + i * 7 + 5);
+    bbox.yMax = *(detectData + i * 7 + 6);
     bboxVec[outOffset + i] = bbox;
   }
 }
@@ -385,6 +411,12 @@ void getMaxConfidenceScores(const real* confData,
 template <typename T>
 bool sortScorePairDescend(const pair<real, T>& pair1,
                           const pair<real, T>& pair2) {
+  return pair1.first > pair2.first;
+}
+
+template <>
+bool sortScorePairDescend(const pair<real, NormalizedBBox>& pair1,
+                          const pair<real, NormalizedBBox>& pair2) {
   return pair1.first > pair2.first;
 }
 

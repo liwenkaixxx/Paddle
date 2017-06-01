@@ -28,7 +28,7 @@ namespace paddle {
 template <typename T>
 struct BBoxBase {
   BBoxBase(T xMin, T yMin, T xMax, T yMax)
-      : xMin(xMin), yMin(yMin), xMax(xMax), yMax(yMax) {}
+      : xMin(xMin), yMin(yMin), xMax(xMax), yMax(yMax), isDifficult(false) {}
 
   BBoxBase() {}
 
@@ -46,6 +46,7 @@ struct BBoxBase {
   T yMin;
   T xMax;
   T yMax;
+  bool isDifficult;
 };
 
 struct NormalizedBBox : BBoxBase<real> {
@@ -119,6 +120,21 @@ NormalizedBBox decodeBBoxWithVar(const NormalizedBBox& priorBBox,
 void getBBoxFromPriorData(const real* priorData,
                           const size_t numBBoxes,
                           vector<NormalizedBBox>& bboxVec);
+
+/**
+ * @brief Extract labels, scores and bboxes from detection matrix, the layout is
+ * imageId | label | score | xmin | ymin | xmax | ymax
+ * @param detectData Matrix of detection value
+ * @param numBBoxes Number of bbox to be extracted
+ * @param labelVec Label of bbox
+ * @param scoreVec Score of bbox
+ * @param bboxVec Append to the vector
+ */
+void getBBoxFromDetectData(const real* detectData,
+                           const size_t numBBoxes,
+                           vector<real>& labelVec,
+                           vector<real>& scoreVec,
+                           vector<NormalizedBBox>& bboxVec);
 
 /**
  * @brief Extract variances from prior matrix, the layout is
@@ -211,6 +227,10 @@ void getMaxConfidenceScores(const real* confData,
 template <typename T>
 bool sortScorePairDescend(const pair<real, T>& pair1,
                           const pair<real, T>& pair2);
+
+template <>
+bool sortScorePairDescend(const pair<real, NormalizedBBox>& pair1,
+                          const pair<real, NormalizedBBox>& pair2);
 
 /**
  * @brief Do NMS for bboxes to remove duplicated bboxes
