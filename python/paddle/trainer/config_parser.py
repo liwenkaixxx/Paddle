@@ -1301,20 +1301,23 @@ def parse_maxout(maxout, input_layer_name, maxout_conf):
 
 # Define an evaluator
 @config_func
-def Evaluator(
-        name,
-        type,
-        inputs,
-        chunk_scheme=None,
-        num_chunk_types=None,
-        classification_threshold=None,
-        positive_label=None,
-        dict_file=None,
-        result_file=None,
-        num_results=None,
-        top_k=None,
-        delimited=None,
-        excluded_chunk_types=None, ):
+def Evaluator(name,
+              type,
+              inputs,
+              chunk_scheme=None,
+              num_chunk_types=None,
+              classification_threshold=None,
+              positive_label=None,
+              dict_file=None,
+              result_file=None,
+              num_results=None,
+              top_k=None,
+              delimited=None,
+              excluded_chunk_types=None,
+              overlap_threshold=None,
+              background_id=None,
+              evaluate_difficult=None,
+              ap_type=None):
     evaluator = g_config.model_config.evaluators.add()
     evaluator.type = type
     evaluator.name = MakeLayerNameInSubmodel(name)
@@ -1347,6 +1350,18 @@ def Evaluator(
 
     if excluded_chunk_types:
         evaluator.excluded_chunk_types.extend(excluded_chunk_types)
+
+    if overlap_threshold is not None:
+        evaluator.overlap_threshold = overlap_threshold
+
+    if background_id is not None:
+        evaluator.background_id = background_id
+
+    if evaluate_difficult is not None:
+        evaluator.evaluate_difficult = evaluate_difficult
+
+    if ap_type is not ap_type:
+        evaluator.ap_type = ap_type
 
 
 class LayerBase(object):
@@ -1691,6 +1706,31 @@ class MultiBoxLossLayer(LayerBase):
         self.config.inputs[0].multibox_loss_conf.background_id = background_id
         self.config.inputs[0].multibox_loss_conf.input_num = input_num
         self.config.size = 1
+
+
+@config_layer('detection_output')
+class DetectionOutputLayer(LayerBase):
+    def __init__(self, name, inputs, size, input_num, num_classes,
+                 nms_threshold, nms_top_k, keep_top_k, confidence_threshold,
+                 background_id):
+        super(DetectionOutputLayer, self).__init__(name, 'detection_output', 0,
+                                                   inputs)
+        config_assert(
+            len(inputs) == (input_num * 2 + 1),
+            'DetectionOutputLayer does not have enough inputs')
+        config_assert(num_classes > background_id,
+                      'Classes number must greater than background ID')
+        self.config.inputs[0].detection_output_conf.num_classes = num_classes
+        self.config.inputs[
+            0].detection_output_conf.nms_threshold = nms_threshold
+        self.config.inputs[0].detection_output_conf.nms_top_k = nms_top_k
+        self.config.inputs[0].detection_output_conf.keep_top_k = keep_top_k
+        self.config.inputs[
+            0].detection_output_conf.confidence_threshold = confidence_threshold
+        self.config.inputs[
+            0].detection_output_conf.background_id = background_id
+        self.config.inputs[0].detection_output_conf.input_num = input_num
+        self.config.size = size
 
 
 @config_layer('data')
