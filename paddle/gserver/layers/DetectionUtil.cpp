@@ -30,7 +30,7 @@ size_t appendWithPermute(const MatrixPtr inMatrix,
     size_t channels = inElementCnt / (height * width * batchSize);
     size_t imgSize = height * width;
     for (size_t i = 0; i < batchSize; ++i) {
-      outOffset += i * (outTotalSize / batchSize);
+      size_t offset = i * (outTotalSize / batchSize) + outOffset;
       const MatrixPtr inTmp =
           Matrix::create(inMatrix->getData() + i * channels * imgSize,
                          channels,
@@ -38,7 +38,7 @@ size_t appendWithPermute(const MatrixPtr inMatrix,
                          false,
                          useGpu);
       MatrixPtr outTmp = Matrix::create(
-          outMatrix->getData() + outOffset, imgSize, channels, false, useGpu);
+          outMatrix->getData() + offset, imgSize, channels, false, useGpu);
       inTmp->transpose(outTmp, false);
     }
     return channels * imgSize;
@@ -61,9 +61,9 @@ size_t decomposeWithPermute(const MatrixPtr inMatrix,
     size_t channels = outElementCnt / (height * width * batchSize);
     size_t imgSize = height * width;
     for (size_t i = 0; i < batchSize; ++i) {
-      inOffset += i * (inTotalSize / batchSize);
+      size_t offset = i * (inTotalSize / batchSize) + inOffset;
       const MatrixPtr inTmp = Matrix::create(
-          inMatrix->getData() + inOffset, imgSize, channels, false, useGpu);
+          inMatrix->getData() + offset, imgSize, channels, false, useGpu);
       MatrixPtr outTmp =
           Matrix::create(outMatrix->getData() + i * channels * imgSize,
                          channels,
@@ -445,8 +445,9 @@ void applyNMSFast(const vector<NormalizedBBox>& bboxes,
         const size_t savedIdx = (*indices)[i];
         real overlap = jaccardOverlap(bboxes[idx], bboxes[savedIdx]);
         keep = overlap <= nmsThreshold;
-      } else
+      } else {
         break;
+      }
     }
     if (keep) indices->push_back(idx);
     scores.erase(scores.begin());
