@@ -437,7 +437,7 @@ def __layer_name_mapping_parent_names__(inname):
         lambda x: x in ['input1', 'input2', 'label', 'input', 'a', 'b',
                         'expand_as',
                         'weights', 'vectors', 'weight', 'score', 'left',
-                        'right', 'output_mem'],
+                        'right', 'output_mem', 'input_loc', 'input_conf', 'priorbox', 'image'],
         all_args)
 
 
