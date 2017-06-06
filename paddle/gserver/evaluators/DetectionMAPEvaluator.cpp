@@ -126,65 +126,7 @@ public:
   }
 
   virtual void printStats(std::ostream& os) const {
-    real mAP = 0.0;
-    size_t count = 0;
-    for (map<size_t, size_t>::const_iterator it = numPos_.begin();
-         it != numPos_.end();
-         ++it) {
-      size_t label = it->first;
-      size_t labelNumPos = it->second;
-      if (labelNumPos == 0 || allTruePos_.find(label) == allTruePos_.end())
-        continue;
-      vector<pair<real, size_t>> labelTruePos = allTruePos_.find(label)->second;
-      vector<pair<real, size_t>> labelFalsePos =
-          allFalsePos_.find(label)->second;
-      // Compute average precision.
-      vector<size_t> tpCumSum;
-      getAccumulation(labelTruePos, &tpCumSum);
-      vector<size_t> fpCumSum;
-      getAccumulation(labelFalsePos, &fpCumSum);
-      std::vector<real> precision, recall;
-      size_t num = tpCumSum.size();
-      // Compute Precision.
-      for (size_t i = 0; i < num; ++i) {
-        CHECK_LE(tpCumSum[i], labelNumPos);
-        precision.push_back(static_cast<real>(tpCumSum[i]) /
-                            static_cast<real>(tpCumSum[i] + fpCumSum[i]));
-        recall.push_back(static_cast<real>(tpCumSum[i]) / labelNumPos);
-      }
-      // VOC2007 style
-      if (apType_ == "11point") {
-        vector<real> maxPrecisions(11, 0.0);
-        int startIdx = num - 1;
-        for (int j = 10; j >= 0; --j)
-          for (int i = startIdx; i >= 0; --i) {
-            if (recall[i] < j / 10.) {
-              startIdx = i;
-              if (j > 0) maxPrecisions[j - 1] = maxPrecisions[j];
-              break;
-            } else {
-              if (maxPrecisions[j] < precision[i])
-                maxPrecisions[j] = precision[i];
-            }
-          }
-        for (int j = 10; j >= 0; --j) mAP += maxPrecisions[j] / 11;
-        ++count;
-      } else if (apType_ == "Integral") {
-        // Nature integral
-        real averagePrecisions = 0.;
-        real prevRecall = 0.;
-        for (size_t i = 0; i < num; ++i) {
-          if (fabs(recall[i] - prevRecall) > 1e-6)
-            averagePrecisions += precision[i] * fabs(recall[i] - prevRecall);
-          prevRecall = recall[i];
-        }
-        mAP += averagePrecisions;
-        ++count;
-      } else {
-        LOG(FATAL) << "Unkown ap version: " << apType_;
-      }
-    }
-    if (count != 0) mAP /= count;
+    real mAP = calcMAP();
     os << "Detection mAP=" << mAP * 100;
   }
 
@@ -272,6 +214,69 @@ protected:
     }
   }
 
+  real calcMAP() const {
+    real mAP = 0.0;
+    size_t count = 0;
+    for (map<size_t, size_t>::const_iterator it = numPos_.begin();
+         it != numPos_.end();
+         ++it) {
+      size_t label = it->first;
+      size_t labelNumPos = it->second;
+      if (labelNumPos == 0 || allTruePos_.find(label) == allTruePos_.end())
+        continue;
+      vector<pair<real, size_t>> labelTruePos = allTruePos_.find(label)->second;
+      vector<pair<real, size_t>> labelFalsePos =
+          allFalsePos_.find(label)->second;
+      // Compute average precision.
+      vector<size_t> tpCumSum;
+      getAccumulation(labelTruePos, &tpCumSum);
+      vector<size_t> fpCumSum;
+      getAccumulation(labelFalsePos, &fpCumSum);
+      std::vector<real> precision, recall;
+      size_t num = tpCumSum.size();
+      // Compute Precision.
+      for (size_t i = 0; i < num; ++i) {
+        CHECK_LE(tpCumSum[i], labelNumPos);
+        precision.push_back(static_cast<real>(tpCumSum[i]) /
+                            static_cast<real>(tpCumSum[i] + fpCumSum[i]));
+        recall.push_back(static_cast<real>(tpCumSum[i]) / labelNumPos);
+      }
+      // VOC2007 style
+      if (apType_ == "11point") {
+        vector<real> maxPrecisions(11, 0.0);
+        int startIdx = num - 1;
+        for (int j = 10; j >= 0; --j)
+          for (int i = startIdx; i >= 0; --i) {
+            if (recall[i] < j / 10.) {
+              startIdx = i;
+              if (j > 0) maxPrecisions[j - 1] = maxPrecisions[j];
+              break;
+            } else {
+              if (maxPrecisions[j] < precision[i])
+                maxPrecisions[j] = precision[i];
+            }
+          }
+        for (int j = 10; j >= 0; --j) mAP += maxPrecisions[j] / 11;
+        ++count;
+      } else if (apType_ == "Integral") {
+        // Nature integral
+        real averagePrecisions = 0.;
+        real prevRecall = 0.;
+        for (size_t i = 0; i < num; ++i) {
+          if (fabs(recall[i] - prevRecall) > 1e-6)
+            averagePrecisions += precision[i] * fabs(recall[i] - prevRecall);
+          prevRecall = recall[i];
+        }
+        mAP += averagePrecisions;
+        ++count;
+      } else {
+        LOG(FATAL) << "Unkown ap version: " << apType_;
+      }
+    }
+    if (count != 0) mAP /= count;
+    return mAP;
+  }
+
   void getAccumulation(vector<pair<real, size_t>> inPairs,
                        vector<size_t>* accuVec) const {
     std::stable_sort(
@@ -285,6 +290,8 @@ protected:
   }
 
   std::string getTypeImpl() const { return "detection_map"; }
+
+  real getValueImpl() const { return calcMAP() * 100; }
 
 private:
   real overlapThreshold_;
